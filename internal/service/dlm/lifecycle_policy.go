@@ -416,7 +416,7 @@ func ResourceLifecyclePolicy() *schema.Resource {
 												"count": {
 													Type:         schema.TypeInt,
 													Optional:     true,
-													ValidateFunc: validation.IntBetween(1, 1000),
+													ValidateFunc: validation.IntBetween(0, 1000),
 												},
 												"interval": {
 													Type:         schema.TypeInt,
@@ -1181,8 +1181,6 @@ func expandArchiveRule(cfg []interface{}) *dlm.ArchiveRule {
 		rule.RetainRule = expandArchiveRuleRetainRule(v)
 	}
 
-	log.Printf("[DEBUG] ArchiveRule is: %s", rule)
-
 	return rule
 }
 
@@ -1223,55 +1221,21 @@ func expandRetentionArchiveTier(cfg []interface{}) *dlm.RetentionArchiveTier {
 	return rule
 }
 
-func flattenArchiveRule(rules []*dlm.ArchiveRule) []map[string]interface{} {
-	if len(rules) == 0 {
-		return []interface{}{}
-	}
+func flattenArchiveRule(rule *dlm.ArchiveRule) []map[string]interface{} {
+	result := make(map[string]interface{})
+	result["retain_rule"] = flattenArchiveRuleRetainRule(rule.RetainRule)
 
-	var result []interface{}
-
-	for _, rule := range rules {
-		if rule == nil {
-			continue
-		}
-
-		m := map[string]interface{}{
-			"retain_rule": flattenArchiveRuleRetainRule(rule.RetainRule),
-		}
-
-		result.append(result, m)
-	}
-
-	return result
+	return []map[string]interface{}{result}
 }
 
-func flattenArchiveRuleRetainRule(rules []*dlm.ArchiveRetainRule) []interface{} {
-	if len(rules) == 0 {
-		return []interface{}{}
-	}
+func flattenArchiveRuleRetainRule(rule *dlm.ArchiveRetainRule) []map[string]interface{} {
+	result := make(map[string]interface{})
+	result["retention_archive_tier"] = flattenRetentionArchiveTier(rule.RetentionArchiveTier)
 
-	var result []interface{}
-
-	for _, rule := range rules {
-		if rule == nil {
-			continue
-		}
-
-		m := map[string]interface{}{
-			"retention_archive_tier": flattenRetentionArchiveTier(rule.RetentionArchiveTier),
-		}
-
-		result.append(result, m)
-	}
-
-	return result
+	return []map[string]interface{}{result}
 }
 
-func flattenRetentionArchiveTier(rule *dlm.RetentionArchiveTier) []interface{} {
-	if rule == nil {
-		return []interface{}{}
-	}
-
+func flattenRetentionArchiveTier(rule *dlm.RetentionArchiveTier) []map[string]interface{} {
 	result := make(map[string]interface{})
 	result["count"] = aws.Int64Value(rule.Count)
 	result["interval_unit"] = aws.StringValue(rule.IntervalUnit)
