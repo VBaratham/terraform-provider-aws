@@ -434,6 +434,51 @@ func ResourceLifecyclePolicy() *schema.Resource {
 											},
 										},
 									},
+									"archive_rule": {
+										Type:     schema.TypeList,
+										Optional: true,
+										MaxItems: 1,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"retain_rule": {
+													Type:     schema.TypeList,
+													Required: true,
+													MaxItems: 1,
+													Elem: &schema.Resource{
+														Schema: map[string]*schema.Schema{
+															"retention_archive_tier": {
+																Type:     schema.TypeList,
+																Required: true,
+																MaxItems: 1,
+																Elem: &schema.Resource{
+																	Schema: map[string]*schema.Schema{
+																		"count": {
+																			Type:         schema.TypeInt,
+																			Optional:     true,
+																			ValidateFunc: validation.IntBetween(1, 1000),
+																		},
+																		"interval": {
+																			Type:         schema.TypeInt,
+																			Optional:     true,
+																			ValidateFunc: validation.IntAtLeast(1),
+																		},
+																		"interval_unit": {
+																			Type:     schema.TypeString,
+																			Optional: true,
+																			ValidateFunc: validation.StringInSlice(
+																				dlm.RetentionIntervalUnitValues_Values(),
+																				false,
+																			),
+																		},
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
 									"share_rule": {
 										Type:     schema.TypeList,
 										Optional: true,
@@ -689,6 +734,9 @@ func expandSchedules(cfg []interface{}) []*dlm.Schedule {
 		if v, ok := m["retain_rule"]; ok {
 			schedule.RetainRule = expandRetainRule(v.([]interface{}))
 		}
+		if v, ok := m["archive_rule"]; ok {
+			schedule.ArchiveRule = expandArchiveRule(v.([]interface{}))
+		}
 		if v, ok := m["tags_to_add"]; ok {
 			schedule.TagsToAdd = expandTags(v.(map[string]interface{}))
 		}
@@ -724,6 +772,10 @@ func flattenSchedules(schedules []*dlm.Schedule) []map[string]interface{} {
 
 		if s.ShareRules != nil {
 			m["share_rule"] = flattenShareRule(s.ShareRules)
+		}
+
+		if s.ArchiveRule != nil {
+			m["archive_rule"] = flattenArchiveRule(s.ArchiveRule)
 		}
 
 		result[i] = m
@@ -1117,6 +1169,113 @@ func flattenRetainRule(retainRule *dlm.RetainRule) []map[string]interface{} {
 	result["count"] = aws.Int64Value(retainRule.Count)
 	result["interval_unit"] = aws.StringValue(retainRule.IntervalUnit)
 	result["interval"] = aws.Int64Value(retainRule.Interval)
+
+	return []map[string]interface{}{result}
+}
+
+func expandArchiveRule(cfg []interface{}) *dlm.ArchiveRule {
+	m := cfg[0].(map[string]interface{})
+	rule := &dlm.ArchiveRule{}
+
+	if v, ok := m["retain_rule"].([]interface{}); ok && len(v) > 0 && v[0] != nil {
+		rule.RetainRule = expandArchiveRuleRetainRule(v)
+	}
+
+	log.Printf("[DEBUG] ArchiveRule is: %s", rule)
+
+	return rule
+}
+
+func expandArchiveRuleRetainRule(l []interface{}) *dlm.ArchiveRetainRule {
+	if len(l) == 0 || l[0] == nil {
+		return nil
+	}
+
+	m := l[0].(map[string]interface{})
+	rule := &dlm.ArchiveRetainRule{}
+
+	if v, ok := m["retention_archive_tier"].([]interface{}); ok && len(v) > 0 && v[0] != nil {
+		rule.RetentionArchiveTier = expandRetentionArchiveTier(v)
+	}
+
+	return rule
+}
+
+func expandRetentionArchiveTier(cfg []interface{}) *dlm.RetentionArchiveTier {
+	if len(cfg) == 0 || cfg[0] == nil {
+		return nil
+	}
+	m := cfg[0].(map[string]interface{})
+	rule := &dlm.RetentionArchiveTier{}
+
+	if v, ok := m["count"].(int); ok && v > 0 {
+		rule.Count = aws.Int64(int64(v))
+	}
+
+	if v, ok := m["interval"].(int); ok && v > 0 {
+		rule.Interval = aws.Int64(int64(v))
+	}
+
+	if v, ok := m["interval_unit"].(string); ok && v != "" {
+		rule.IntervalUnit = aws.String(v)
+	}
+
+	return rule
+}
+
+func flattenArchiveRule(rules []*dlm.ArchiveRule) []map[string]interface{} {
+	if len(rules) == 0 {
+		return []interface{}{}
+	}
+
+	var result []interface{}
+
+	for _, rule := range rules {
+		if rule == nil {
+			continue
+		}
+
+		m := map[string]interface{}{
+			"retain_rule": flattenArchiveRuleRetainRule(rule.RetainRule),
+		}
+
+		result.append(result, m)
+	}
+
+	return result
+}
+
+func flattenArchiveRuleRetainRule(rules []*dlm.ArchiveRetainRule) []interface{} {
+	if len(rules) == 0 {
+		return []interface{}{}
+	}
+
+	var result []interface{}
+
+	for _, rule := range rules {
+		if rule == nil {
+			continue
+		}
+
+		m := map[string]interface{}{
+			"retention_archive_tier": flattenRetentionArchiveTier(rule.RetentionArchiveTier),
+		}
+
+		result.append(result, m)
+	}
+
+	return result
+}
+
+func flattenRetentionArchiveTier(rule *dlm.RetentionArchiveTier) []interface{} {
+	if rule == nil {
+		return []interface{}{}
+	}
+
+	result := make(map[string]interface{})
+	result["count"] = aws.Int64Value(rule.Count)
+	result["interval_unit"] = aws.StringValue(rule.IntervalUnit)
+	result["interval"] = aws.Int64Value(rule.Interval)
 
 	return []map[string]interface{}{result}
 }
